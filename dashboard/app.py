@@ -414,17 +414,34 @@ if not eex.empty:
     st.caption(f"Last ingested: {latest_eex['auction_date'].strftime('%d %b %Y')} · Silver updated on pipeline run")
 
     fig_eex = go.Figure()
+    if "proceeds_eur" in eex.columns:
+        eex_proc = eex.copy()
+        eex_proc["year"] = eex_proc["auction_date"].dt.year
+        annual_proceeds = eex_proc.groupby("year")["proceeds_eur"].sum().reset_index()
+        fig_eex.add_trace(go.Bar(
+            x=pd.to_datetime(annual_proceeds["year"].astype(str)),
+            y=annual_proceeds["proceeds_eur"] / 1e9,
+            name="Annual proceeds (€bn)",
+            marker_color="#888888",
+            opacity=0.35,
+            yaxis="y2",
+            hovertemplate="<b>%{x|%Y}</b><br>€%{y:.2f}bn raised<extra></extra>",
+        ))
     fig_eex.add_trace(go.Scatter(
         x=eex["auction_date"],
         y=eex["clearing_price_eur"],
         mode="lines+markers",
         marker=dict(size=3),
         line=dict(color="#f5a623", width=1.5),
-        name="Clearing price (€ per tonne CO₂)",
-        hovertemplate="%{x|%d %b %Y}<br>€%{y:.2f} per tonne CO₂<extra></extra>",
+        name="Clearing price (€/tonne CO₂)",
+        yaxis="y1",
+        hovertemplate="%{x|%d %b %Y}<br>€%{y:.2f}/tonne CO₂<extra></extra>",
     ))
     fig_eex.update_layout(
-        yaxis_title="€ per tonne CO₂",
+        yaxis=dict(title="€ per tonne CO₂", gridcolor="#1e1e1e", linecolor="#333333"),
+        yaxis2=dict(title="Annual proceeds (€bn)", overlaying="y", side="right",
+                    gridcolor="#1e1e1e", linecolor="#333333"),
+        xaxis=dict(gridcolor="#1e1e1e", linecolor="#333333"),
         xaxis_title=None,
         hovermode="x unified",
         margin=dict(l=0, r=0, t=10, b=0),
@@ -432,8 +449,7 @@ if not eex.empty:
         paper_bgcolor="#0a0a0a",
         plot_bgcolor="#0a0a0a",
         font=dict(family="Courier New", color="#aaaaaa", size=11),
-        xaxis=dict(gridcolor="#1e1e1e", linecolor="#333333"),
-        yaxis=dict(gridcolor="#1e1e1e", linecolor="#333333"),
+        legend=dict(orientation="h", x=0, y=1.08, font=dict(color="#aaaaaa")),
     )
     st.plotly_chart(fig_eex, use_container_width=True)
 
