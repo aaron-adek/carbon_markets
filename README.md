@@ -64,6 +64,8 @@ infrastructure/
     consumer.service
     stream_to_silver.service
     stream_to_silver.timer
+    stream_to_silver_ticks.service
+    stream_to_silver_ticks.timer
     dashboard.service
     cloudflared.service
     setup.sh           One-shot bootstrap: venv, dependencies, systemd install
@@ -71,9 +73,10 @@ infrastructure/
 processing/
   utils.py             Shared S3 helpers for Silver transforms
   silver/
-    eex_to_silver.py   EEX Bronze → Silver
-    eutl_to_silver.py  EUTL Bronze → Silver
-    stream_to_silver.py  Stream ticks → daily OHLCV + VWAP Silver
+    eex_to_silver.py         EEX Bronze → Silver
+    eutl_to_silver.py        EUTL Bronze → Silver
+    stream_to_silver.py      Stream ticks → daily OHLCV + VWAP Silver
+    stream_to_silver_ticks.py  Stream ticks → per-symbol intraday tick files (Silver)
   requirements.txt
 dashboard/
   app.py               Streamlit dashboard (Bloomberg dark theme)
@@ -101,7 +104,8 @@ bronze/
     carbon_prices_raw/event_date=<date>/carbon_prices_raw_<timestamp>.parquet
 silver/
   eex_auctions/eex_auctions.parquet
-  carbon_prices_ohlcv/carbon_prices_ohlcv.parquet   (daily OHLCV + VWAP per symbol)
+  carbon_prices_ohlcv/carbon_prices_ohlcv.parquet          (daily OHLCV + VWAP per symbol)
+  stream/intraday_ticks/<symbol>/date=<date>.parquet       (per-symbol intraday tick file, 1 object/symbol/day)
   eutl_verified_emissions/eutl_verified_emissions.parquet
 ```
 
@@ -193,6 +197,7 @@ terraform output -raw secret_access_key
 | `ingestion/stream/proxy_producer.py` | Pi systemd | On boot, always-on |
 | `ingestion/stream/s3_consumer.py` | Pi systemd | On boot, always-on |
 | `processing/silver/stream_to_silver.py` | Pi systemd timer | Every 60 seconds |
+| `processing/silver/stream_to_silver_ticks.py` | Pi systemd timer | Every 60 seconds |
 | `dashboard/app.py` | Pi systemd | On boot, always-on |
 
 GitHub Actions secrets required: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`, `S3_BUCKET`.

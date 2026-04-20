@@ -73,23 +73,18 @@ def load_ohlcv() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=60)
-def load_ticks(trade_date: str) -> pd.DataFrame:
-    """Read all Bronze tick files for a given date partition."""
-    prefix = f"bronze/stream/carbon_prices_raw/event_date={trade_date}/"
+def load_ticks(trade_date: str, symbol: str) -> pd.DataFrame:
+    """Read Gold intraday tick file for a given symbol and date."""
+    key = f"silver/stream/intraday_ticks/{symbol}/date={trade_date}.parquet"
     try:
-        resp = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix=prefix)
-        files = resp.get("Contents", [])
-        if not files:
-            return pd.DataFrame()
-        dfs = []
-        for obj_meta in files:
-            obj = s3.get_object(Bucket=S3_BUCKET, Key=obj_meta["Key"])
-            dfs.append(pd.read_parquet(io.BytesIO(obj["Body"].read())))
-        df = pd.concat(dfs, ignore_index=True)
+        resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
+        df = pd.read_parquet(io.BytesIO(resp["Body"].read()))
         df["event_time_utc"] = pd.to_datetime(df["event_time_utc"], utc=True)
         return df.sort_values("event_time_utc")
-    except ClientError:
-        return pd.DataFrame()
+    except ClientError as e:
+        if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
+            return pd.DataFrame()
+        raise
 
 
 def load_eutl() -> pd.DataFrame:
@@ -356,8 +351,7 @@ if not ohlcv.empty:
 
     else:  # Tick price track
         today_str = latest_row["trade_date"].strftime("%Y-%m-%d")
-        ticks = load_ticks(today_str)
-        ticks_sym = ticks[ticks["symbol"] == selected] if not ticks.empty else pd.DataFrame()
+        ticks_sym = load_ticks(today_str, selected)
 
         if ticks_sym.empty:
             st.info(f"No tick data found for {selected} on {today_str}. Check back once the market has been open for a few minutes.")
@@ -584,16 +578,18 @@ with st.expander("◼ PIPELINE ARCHITECTURE", expanded=False):
             <td>
               <b style="color:#f5a623">S3 Medallion Architecture</b><br>
               · <b>Bronze</b> — raw, immutable, partitioned by date (Parquet)<br>
-              · <b>Silver</b> — cleaned, typed, deduplicated, VWAP-enriched (Parquet)
+              · <b>Silver</b> — cleaned, typed, deduplicated, VWAP-enriched (Parquet)<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;<code>carbon_prices_ohlcv/</code> &nbsp;·&nbsp; <code>stream/intraday_ticks/{symbol}/date={date}.parquet</code>
             </td>
           </tr>
           <tr><td colspan=2 style="padding:6px 0"><hr style="border-color:#1e1e1e"></td></tr>
           <tr>
             <td style="color:#f5a623;padding-right:16px;white-space:nowrap;vertical-align:top">PROCESSING</td>
             <td>
-              · Python transforms: <code>eex_to_silver.py</code>, <code>stream_to_silver.py</code><br>
-              · Stream Silver runs every 60 s via systemd timer on the Pi<br>
-              · VWAP computed as Σ(price × volume) / Σ(volume) per symbol per day
+              · Python transforms: <code>eex_to_silver.py</code>, <code>stream_to_silver.py</code>, <code>stream_to_silver_ticks.py</code><br>
+              · Stream Silver &amp; intraday ticks run every 60 s via systemd timers on the Pi<br>
+              · VWAP computed as Σ(price × volume) / Σ(volume) per symbol per day<br>
+              · <code>stream_to_silver_ticks.py</code> consolidates N Bronze files → 1 Silver object per symbol per day
             </td>
           </tr>
           <tr><td colspan=2 style="padding:6px 0"><hr style="border-color:#1e1e1e"></td></tr>

@@ -69,7 +69,7 @@ if [ -d "$SERVICES_DIR" ] && command -v systemctl &>/dev/null; then
     sudo systemctl daemon-reload
 
     # Remove any stale systemctl edit overrides that could interfere
-    for svc in kafka producer consumer stream_to_silver dashboard cloudflared; do
+    for svc in kafka producer consumer stream_to_silver stream_to_silver_ticks dashboard cloudflared; do
         override_dir="/etc/systemd/system/${svc}.service.d"
         if [ -d "$override_dir" ]; then
             echo "    Removing stale overrides for $svc..."
@@ -82,7 +82,7 @@ if [ -d "$SERVICES_DIR" ] && command -v systemctl &>/dev/null; then
     CF_PID=""
 
     # Enable and (re)start services that should always run
-    for svc in kafka producer consumer stream_to_silver dashboard cloudflared; do
+    for svc in kafka producer consumer stream_to_silver stream_to_silver_ticks dashboard cloudflared; do
         service_file="/etc/systemd/system/${svc}.service"
         [ -f "$service_file" ] || continue
         sudo systemctl enable --quiet "$svc"

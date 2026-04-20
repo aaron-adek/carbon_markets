@@ -30,16 +30,22 @@ resource "aws_iam_policy" "carbon_markets_ingestor" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "S3ReadWrite"
+        Sid    = "S3BronzeReadWrite"
         Effect = "Allow"
         Action = [
           "s3:PutObject",
           "s3:GetObject",
         ]
-        Resource = [
-          "${data.aws_s3_bucket.carbon_markets.arn}/bronze/*",
-          "${data.aws_s3_bucket.carbon_markets.arn}/silver/*",
+        Resource = "${data.aws_s3_bucket.carbon_markets.arn}/bronze/*"
+      },
+      {
+        Sid    = "S3SilverReadWrite"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
         ]
+        Resource = "${data.aws_s3_bucket.carbon_markets.arn}/silver/*"
       },
       {
         Sid    = "S3ListBucket"
@@ -60,15 +66,6 @@ resource "aws_iam_policy" "carbon_markets_ingestor" {
           "secretsmanager:DescribeSecret",
         ]
         Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:carbon-markets/finnhub-api-key*"
-      },
-      {
-        Sid    = "SecretsManagerReadCloudflare"
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret",
-        ]
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:carbon-markets/cloudflare-tunnel-token*"
       }
     ]
   })

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Stream → Silver Intraday Ticks Transform every 60 seconds
+Requires=stream_to_silver_ticks.service
+
+[Timer]
+OnBootSec=90
+OnUnitActiveSec=60
+Unit=stream_to_silver_ticks.service
+
+[Install]
+WantedBy=timers.target
