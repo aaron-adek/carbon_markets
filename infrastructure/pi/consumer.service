@@ -1,0 +1,19 @@
+[Unit]
+Description=Carbon Markets Kafka → S3 Consumer
+Documentation=https://github.com/aaronsgithub/carbon_markets
+After=network-online.target kafka.service
+Wants=network-online.target
+Requires=kafka.service
+
+[Service]
+Type=simple
+User=rasp
+WorkingDirectory=/home/rasp/carbon_markets
+ExecStart=/home/rasp/carbon_markets/.venv/bin/python ingestion/stream/s3_consumer.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/home/rasp/carbon_markets/logs/consumer.log
+StandardError=append:/home/rasp/carbon_markets/logs/consumer.log
+
+[Install]
+WantedBy=multi-user.target

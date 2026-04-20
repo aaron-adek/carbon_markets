@@ -1,0 +1,24 @@
+aws:
+  profile: "carbon markets user"
+  region: us-east-1
+  s3_bucket: carbon-markets-bucket
+
+kafka:
+  bootstrap: localhost:9092
+  topic: carbon.prices.raw
+  group_id: s3-consumer
+
+stream:
+  flush_interval_s: 60
+  symbols:
+    - KRBN
+    - KCCA
+    - ICLN
+    - KEUA
+    - GRN
+
+secrets:
+  finnhub_secret_name: carbon-markets/finnhub-api-key
+
+logging:
+  level: INFO

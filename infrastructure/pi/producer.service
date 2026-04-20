@@ -1,0 +1,19 @@
+[Unit]
+Description=Carbon Markets Finnhub Producer
+Documentation=https://github.com/aaronsgithub/carbon_markets
+After=network-online.target kafka.service
+Wants=network-online.target
+Requires=kafka.service
+
+[Service]
+Type=simple
+User=rasp
+WorkingDirectory=/home/rasp/carbon_markets
+ExecStart=/home/rasp/carbon_markets/.venv/bin/python ingestion/stream/proxy_producer.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/home/rasp/carbon_markets/logs/producer.log
+StandardError=append:/home/rasp/carbon_markets/logs/producer.log
+
+[Install]
+WantedBy=multi-user.target

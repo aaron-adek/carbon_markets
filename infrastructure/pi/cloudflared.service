@@ -1,0 +1,14 @@
+[Unit]
+Description=Cloudflare Tunnel — carbon dashboard
+After=network-online.target dashboard.service
+Wants=network-online.target dashboard.service
+
+[Service]
+Type=simple
+User=rasp
+ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate --url http://localhost:8501
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=Carbon Markets Stream → Silver Transform
+Documentation=https://github.com/aaronsgithub/carbon_markets
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=rasp
+WorkingDirectory=/home/rasp/carbon_markets
+ExecStartPre=/home/rasp/carbon_markets/.venv/bin/pip install -q -r /home/rasp/carbon_markets/processing/requirements.txt
+ExecStart=/home/rasp/carbon_markets/.venv/bin/python processing/silver/stream_to_silver.py
+StandardOutput=append:/home/rasp/carbon_markets/logs/stream_to_silver.log
+StandardError=append:/home/rasp/carbon_markets/logs/stream_to_silver.log

@@ -1,0 +1,19 @@
+[Unit]
+Description=Apache Kafka (KRaft)
+Documentation=https://kafka.apache.org
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rasp
+Environment="KAFKA_HEAP_OPTS=-Xmx1G -Xms512M"
+ExecStart=/home/rasp/kafka/bin/kafka-server-start.sh /home/rasp/kafka/config/kraft/server.properties
+ExecStop=/home/rasp/kafka/bin/kafka-server-stop.sh
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/home/rasp/carbon_markets/logs/kafka.log
+StandardError=append:/home/rasp/carbon_markets/logs/kafka.log
+
+[Install]
+WantedBy=multi-user.target

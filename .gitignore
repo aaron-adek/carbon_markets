@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets — never commit these
+.env
+*.env
+
+# AWS credentials
+.aws/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+crash.log
+
+# Data / output files
+*.csv
+*.parquet
+*.xlsx
+*.zip
+
+# Logs
+logs/
