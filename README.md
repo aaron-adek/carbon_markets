@@ -117,7 +117,7 @@ All configuration lives in `config.yaml` at the project root.
 
 ```yaml
 aws:
-  profile: "carbon markets user"
+  profile: "carbon markets ingestor"
   region: us-east-1
   s3_bucket: carbon-markets-bucket
 
@@ -159,6 +159,7 @@ pip install -r processing/requirements.txt
 
 python processing/silver/eex_to_silver.py
 python processing/silver/stream_to_silver.py
+python processing/silver/stream_to_silver_ticks.py   # intraday ticks, run during/after market hours
 ```
 
 ### Dashboard (local)
@@ -180,7 +181,7 @@ IAM is managed via Terraform. The `carbon-markets-ingestor` user has least-privi
 ```bash
 cd infrastructure/iam
 terraform init
-terraform apply -var="s3_bucket_name=carbon-markets-bucket"
+terraform apply
 
 terraform output access_key_id
 terraform output -raw secret_access_key
@@ -279,7 +280,7 @@ This will:
 #### 9. Verify
 
 ```bash
-sudo systemctl status kafka producer consumer stream_to_silver dashboard cloudflared
+sudo systemctl status kafka producer consumer stream_to_silver stream_to_silver_ticks dashboard cloudflared
 
 journalctl -u dashboard -f
 journalctl -u cloudflared -n 20
@@ -306,3 +307,9 @@ EEX auctions twice a week, EUTL once a year. Total runtime under 5 minutes each.
 
 **Why Cloudflare Tunnel for the dashboard?**
 Exposes the Pi-hosted Streamlit app over public HTTPS with no open ports, no domain required (quick tunnel), and no cost. The tunnel token is stored in AWS Secrets Manager — not in the service file.
+
+**Why pre-compute `proceeds_eur` in Silver?**
+Auction proceeds (`clearing_price_eur × volume_eua`) are a stable derived fact, not a display choice. Computing them once in `eex_to_silver.py` means the dashboard reads a column and plots — no arithmetic at render time, and the value is available to any downstream consumer of the Silver file.
+
+**Why consolidate intraday ticks in Silver (`stream_to_silver_ticks.py`)?**
+Each 60-second consumer flush writes a separate Bronze Parquet file. By the end of a trading day that's ~95 objects per symbol. The tick transform merges them into a single Silver object per symbol per day, reducing dashboard S3 read calls from O(N) to O(1) and making the tick chart load in a single `GetObject`.

@@ -571,6 +571,58 @@ st.divider()
 
 # ── Pipeline Architecture ─────────────────────────────────────────────────────
 
+with st.expander("◼ DATA SOURCES & LIMITATIONS", expanded=False):
+    st.markdown(
+        """
+        <div style="font-family:'Courier New',monospace;font-size:0.82rem;
+                    color:#cccccc;line-height:2">
+        <table style="width:100%;border-collapse:collapse">
+          <tr>
+            <td style="color:#f5a623;padding-right:16px;white-space:nowrap;vertical-align:top">EEX AUCTIONS</td>
+            <td>
+              <b style="color:#f5a623">European Energy Exchange — Primary Auction Results</b><br>
+              · Source: <a href="https://www.eex.com/en/markets/environmental-markets/eu-ets-primary-auction-spot-download" style="color:#f5a623">EEX public download</a> &nbsp;|&nbsp; updated ~twice weekly (Tue &amp; Thu)<br>
+              · Covers EEX-run auctions on behalf of most EU member states from 2020 → present<br>
+              · <b style="color:#EF4444">Limitation:</b> Poland and a small number of member states run their own auctions outside EEX — their volumes are not captured here, so total proceeds are a slight undercount of EU-wide figures<br>
+              · <b style="color:#EF4444">Limitation:</b> Batch ingest — data lags by up to 48 hours after each auction
+            </td>
+          </tr>
+          <tr><td colspan=2 style="padding:6px 0"><hr style="border-color:#1e1e1e"></td></tr>
+          <tr>
+            <td style="color:#f5a623;padding-right:16px;white-space:nowrap;vertical-align:top">CARBON ETF STREAM</td>
+            <td>
+              <b style="color:#f5a623">Finnhub WebSocket — Carbon ETF Intraday Ticks</b><br>
+              · Symbols: KRBN, KCCA, ICLN, KEUA, GRN &nbsp;|&nbsp; streamed tick-by-tick during US market hours<br>
+              · KRBN &amp; KEUA track EUA futures directly; KCCA, ICLN, GRN are broader clean energy proxies<br>
+              · <b style="color:#EF4444">Limitation:</b> These are ETFs, not EUA spot or futures prices — they track the carbon market but are not the same instrument as the EEX clearing price<br>
+              · <b style="color:#EF4444">Limitation:</b> KRBN, KEUA, KCCA and GRN are low-volume ETFs — tick counts will be sparse compared to large-cap equities; some days may have zero trades<br>
+              · <b style="color:#EF4444">Limitation:</b> Stream runs on a Raspberry Pi — if the Pi is offline, data collection pauses until it restarts
+            </td>
+          </tr>
+          <tr><td colspan=2 style="padding:6px 0"><hr style="border-color:#1e1e1e"></td></tr>
+          <tr>
+            <td style="color:#f5a623;padding-right:16px;white-space:nowrap;vertical-align:top">EUTL EMISSIONS</td>
+            <td>
+              <b style="color:#f5a623">EU Transaction Log — Verified Emissions Registry</b><br>
+              · Source: European Environment Agency (EEA) bulk download &nbsp;|&nbsp; updated annually each April<br>
+              · Covers ~11,000 regulated installations across all EU ETS sectors (power, industry, aviation)<br>
+              · <b style="color:#EF4444">Limitation:</b> Annual cadence only — emissions data is always at least one year old<br>
+              · <b style="color:#EF4444">Limitation:</b> EEA server returns intermittent errors; ingest may fail in some years and require a manual retry
+            </td>
+          </tr>
+          <tr><td colspan=2 style="padding:6px 0"><hr style="border-color:#1e1e1e"></td></tr>
+          <tr>
+            <td style="color:#f5a623;padding-right:16px;white-space:nowrap;vertical-align:top">PROCEEDS NOTE</td>
+            <td>
+              Annual auction proceeds shown in the EEX chart are computed as <code>clearing_price × volume</code> per auction and summed by year. This is gross revenue to EU governments — it does not account for free allocations, which reduce the effective carbon cost for regulated entities.
+            </td>
+          </tr>
+        </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 with st.expander("◼ PIPELINE ARCHITECTURE", expanded=False):
     st.markdown(
         """
