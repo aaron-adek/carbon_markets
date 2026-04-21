@@ -1,0 +1,12 @@
+[Unit]
+Description=Carbon Markets Stream → Silver Intraday Ticks Transform
+Documentation=https://github.com/aaronsgithub/carbon_markets
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=rasp
+WorkingDirectory=/home/rasp/carbon_markets
+ExecStart=/home/rasp/carbon_markets/.venv/bin/python processing/silver/stream_to_silver_ticks.py
+StandardOutput=append:/home/rasp/carbon_markets/logs/stream_to_silver_ticks.log
+StandardError=append:/home/rasp/carbon_markets/logs/stream_to_silver_ticks.log

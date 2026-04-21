@@ -49,6 +49,13 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
     for col in ["volume_eua", "total_bidders", "successful_bidders", "proceeds_eur"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
+    # Derive proceeds where not already supplied by EEX
+    if "proceeds_eur" not in df.columns or df["proceeds_eur"].isna().all():
+        df["proceeds_eur"] = df["clearing_price_eur"] * df["volume_eua"]
+    else:
+        mask = df["proceeds_eur"].isna()
+        df.loc[mask, "proceeds_eur"] = df.loc[mask, "clearing_price_eur"] * df.loc[mask, "volume_eua"]
+
     df = df.drop_duplicates(subset=["auction_date", "auction_name", "contract", "country"])
     df = df.dropna(subset=["auction_date", "clearing_price_eur"])
 

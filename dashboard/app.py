@@ -73,23 +73,18 @@ def load_ohlcv() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=60)
-def load_ticks(trade_date: str) -> pd.DataFrame:
-    """Read all Bronze tick files for a given date partition."""
-    prefix = f"bronze/stream/carbon_prices_raw/event_date={trade_date}/"
+def load_ticks(trade_date: str, symbol: str) -> pd.DataFrame:
+    """Read Gold intraday tick file for a given symbol and date."""
+    key = f"silver/stream/intraday_ticks/{symbol}/date={trade_date}.parquet"
     try:
-        resp = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix=prefix)
-        files = resp.get("Contents", [])
-        if not files:
-            return pd.DataFrame()
-        dfs = []
-        for obj_meta in files:
-            obj = s3.get_object(Bucket=S3_BUCKET, Key=obj_meta["Key"])
-            dfs.append(pd.read_parquet(io.BytesIO(obj["Body"].read())))
-        df = pd.concat(dfs, ignore_index=True)
+        resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
+        df = pd.read_parquet(io.BytesIO(resp["Body"].read()))
         df["event_time_utc"] = pd.to_datetime(df["event_time_utc"], utc=True)
         return df.sort_values("event_time_utc")
-    except ClientError:
-        return pd.DataFrame()
+    except ClientError as e:
+        if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
+            return pd.DataFrame()
+        raise
 
 
 def load_eutl() -> pd.DataFrame:
@@ -356,8 +351,7 @@ if not ohlcv.empty:
 
     else:  # Tick price track
         today_str = latest_row["trade_date"].strftime("%Y-%m-%d")
-        ticks = load_ticks(today_str)
-        ticks_sym = ticks[ticks["symbol"] == selected] if not ticks.empty else pd.DataFrame()
+        ticks_sym = load_ticks(today_str, selected)
 
         if ticks_sym.empty:
             st.info(f"No tick data found for {selected} on {today_str}. Check back once the market has been open for a few minutes.")
@@ -420,17 +414,34 @@ if not eex.empty:
     st.caption(f"Last ingested: {latest_eex['auction_date'].strftime('%d %b %Y')} · Silver updated on pipeline run")
 
     fig_eex = go.Figure()
+    if "proceeds_eur" in eex.columns:
+        eex_proc = eex.copy()
+        eex_proc["year"] = eex_proc["auction_date"].dt.year
+        annual_proceeds = eex_proc.groupby("year")["proceeds_eur"].sum().reset_index()
+        fig_eex.add_trace(go.Bar(
+            x=pd.to_datetime(annual_proceeds["year"].astype(str)),
+            y=annual_proceeds["proceeds_eur"] / 1e9,
+            name="Annual proceeds (€bn)",
+            marker_color="#888888",
+            opacity=0.35,
+            yaxis="y2",
+            hovertemplate="<b>%{x|%Y}</b><br>€%{y:.2f}bn raised<extra></extra>",
+        ))
     fig_eex.add_trace(go.Scatter(
         x=eex["auction_date"],
         y=eex["clearing_price_eur"],
         mode="lines+markers",
         marker=dict(size=3),
         line=dict(color="#f5a623", width=1.5),
-        name="Clearing price (€ per tonne CO₂)",
-        hovertemplate="%{x|%d %b %Y}<br>€%{y:.2f} per tonne CO₂<extra></extra>",
+        name="Clearing price (€/tonne CO₂)",
+        yaxis="y1",
+        hovertemplate="%{x|%d %b %Y}<br>€%{y:.2f}/tonne CO₂<extra></extra>",
     ))
     fig_eex.update_layout(
-        yaxis_title="€ per tonne CO₂",
+        yaxis=dict(title="€ per tonne CO₂", gridcolor="#1e1e1e", linecolor="#333333"),
+        yaxis2=dict(title="Annual proceeds (€bn)", overlaying="y", side="right",
+                    gridcolor="#1e1e1e", linecolor="#333333"),
+        xaxis=dict(gridcolor="#1e1e1e", linecolor="#333333"),
         xaxis_title=None,
         hovermode="x unified",
         margin=dict(l=0, r=0, t=10, b=0),
@@ -438,8 +449,7 @@ if not eex.empty:
         paper_bgcolor="#0a0a0a",
         plot_bgcolor="#0a0a0a",
         font=dict(family="Courier New", color="#aaaaaa", size=11),
-        xaxis=dict(gridcolor="#1e1e1e", linecolor="#333333"),
-        yaxis=dict(gridcolor="#1e1e1e", linecolor="#333333"),
+        legend=dict(orientation="h", x=0, y=1.08, font=dict(color="#aaaaaa")),
     )
     st.plotly_chart(fig_eex, use_container_width=True)
 
@@ -561,6 +571,58 @@ st.divider()
 
 # ── Pipeline Architecture ─────────────────────────────────────────────────────
 
+with st.expander("◼ DATA SOURCES & LIMITATIONS", expanded=False):
+    st.markdown(
+        """
+        <div style="font-family:'Courier New',monospace;font-size:0.82rem;
+                    color:#cccccc;line-height:2">
+        <table style="width:100%;border-collapse:collapse">
+          <tr>
+            <td style="color:#f5a623;padding-right:16px;white-space:nowrap;vertical-align:top">EEX AUCTIONS</td>
+            <td>
+              <b style="color:#f5a623">European Energy Exchange — Primary Auction Results</b><br>
+              · Source: <a href="https://www.eex.com/en/markets/environmental-markets/eu-ets-primary-auction-spot-download" style="color:#f5a623">EEX public download</a> &nbsp;|&nbsp; updated ~twice weekly (Tue &amp; Thu)<br>
+              · Covers EEX-run auctions on behalf of most EU member states from 2020 → present<br>
+              · <b style="color:#EF4444">Limitation:</b> Poland and a small number of member states run their own auctions outside EEX — their volumes are not captured here, so total proceeds are a slight undercount of EU-wide figures<br>
+              · <b style="color:#EF4444">Limitation:</b> Batch ingest — data lags by up to 48 hours after each auction
+            </td>
+          </tr>
+          <tr><td colspan=2 style="padding:6px 0"><hr style="border-color:#1e1e1e"></td></tr>
+          <tr>
+            <td style="color:#f5a623;padding-right:16px;white-space:nowrap;vertical-align:top">CARBON ETF STREAM</td>
+            <td>
+              <b style="color:#f5a623">Finnhub WebSocket — Carbon ETF Intraday Ticks</b><br>
+              · Symbols: KRBN, KCCA, ICLN, KEUA, GRN &nbsp;|&nbsp; streamed tick-by-tick during US market hours<br>
+              · KRBN &amp; KEUA track EUA futures directly; KCCA, ICLN, GRN are broader clean energy proxies<br>
+              · <b style="color:#EF4444">Limitation:</b> These are ETFs, not EUA spot or futures prices — they track the carbon market but are not the same instrument as the EEX clearing price<br>
+              · <b style="color:#EF4444">Limitation:</b> KRBN, KEUA, KCCA and GRN are low-volume ETFs — tick counts will be sparse compared to large-cap equities; some days may have zero trades<br>
+              · <b style="color:#EF4444">Limitation:</b> Stream runs on a Raspberry Pi — if the Pi is offline, data collection pauses until it restarts
+            </td>
+          </tr>
+          <tr><td colspan=2 style="padding:6px 0"><hr style="border-color:#1e1e1e"></td></tr>
+          <tr>
+            <td style="color:#f5a623;padding-right:16px;white-space:nowrap;vertical-align:top">EUTL EMISSIONS</td>
+            <td>
+              <b style="color:#f5a623">EU Transaction Log — Verified Emissions Registry</b><br>
+              · Source: European Environment Agency (EEA) bulk download &nbsp;|&nbsp; updated annually each April<br>
+              · Covers ~11,000 regulated installations across all EU ETS sectors (power, industry, aviation)<br>
+              · <b style="color:#EF4444">Limitation:</b> Annual cadence only — emissions data is always at least one year old<br>
+              · <b style="color:#EF4444">Limitation:</b> EEA server returns intermittent errors; ingest may fail in some years and require a manual retry
+            </td>
+          </tr>
+          <tr><td colspan=2 style="padding:6px 0"><hr style="border-color:#1e1e1e"></td></tr>
+          <tr>
+            <td style="color:#f5a623;padding-right:16px;white-space:nowrap;vertical-align:top">PROCEEDS NOTE</td>
+            <td>
+              Annual auction proceeds shown in the EEX chart are computed as <code>clearing_price × volume</code> per auction and summed by year. This is gross revenue to EU governments — it does not account for free allocations, which reduce the effective carbon cost for regulated entities.
+            </td>
+          </tr>
+        </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 with st.expander("◼ PIPELINE ARCHITECTURE", expanded=False):
     st.markdown(
         """
@@ -584,16 +646,18 @@ with st.expander("◼ PIPELINE ARCHITECTURE", expanded=False):
             <td>
               <b style="color:#f5a623">S3 Medallion Architecture</b><br>
               · <b>Bronze</b> — raw, immutable, partitioned by date (Parquet)<br>
-              · <b>Silver</b> — cleaned, typed, deduplicated, VWAP-enriched (Parquet)
+              · <b>Silver</b> — cleaned, typed, deduplicated, VWAP-enriched (Parquet)<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;<code>carbon_prices_ohlcv/</code> &nbsp;·&nbsp; <code>stream/intraday_ticks/{symbol}/date={date}.parquet</code>
             </td>
           </tr>
           <tr><td colspan=2 style="padding:6px 0"><hr style="border-color:#1e1e1e"></td></tr>
           <tr>
             <td style="color:#f5a623;padding-right:16px;white-space:nowrap;vertical-align:top">PROCESSING</td>
             <td>
-              · Python transforms: <code>eex_to_silver.py</code>, <code>stream_to_silver.py</code><br>
-              · Stream Silver runs every 60 s via systemd timer on the Pi<br>
-              · VWAP computed as Σ(price × volume) / Σ(volume) per symbol per day
+              · Python transforms: <code>eex_to_silver.py</code>, <code>stream_to_silver.py</code>, <code>stream_to_silver_ticks.py</code><br>
+              · Stream Silver &amp; intraday ticks run every 60 s via systemd timers on the Pi<br>
+              · VWAP computed as Σ(price × volume) / Σ(volume) per symbol per day<br>
+              · <code>stream_to_silver_ticks.py</code> consolidates N Bronze files → 1 Silver object per symbol per day
             </td>
           </tr>
           <tr><td colspan=2 style="padding:6px 0"><hr style="border-color:#1e1e1e"></td></tr>

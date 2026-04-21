@@ -1,5 +1,5 @@
 aws:
-  profile: "carbon markets user"
+  profile: "carbon markets ingestor"
   region: us-east-1
   s3_bucket: carbon-markets-bucket
 
